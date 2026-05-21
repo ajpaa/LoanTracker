@@ -1,4 +1,23 @@
+import React from "react"
+import PaymentAllocation from "./paymentAllocation"
+
 export default function LoansPage() {
+
+  const entries = [
+    {
+      id: 1,
+      ref_id: "LN-001",
+      name: "Personal Loan",
+      borrower: "John",
+      lender: "Maria",
+      amount: 5000,
+      remaining: 2000,
+      date: "2026-05-21",
+      status: "Active",
+      transaction_type: "group_expense",
+    },
+  ]
+
   return (
     <div className="container py-4">
 
@@ -26,9 +45,11 @@ export default function LoansPage() {
             <button className="btn btn-outline-secondary">
               All
             </button>
+
             <button className="btn btn-outline-secondary">
               I Lent
             </button>
+
             <button className="btn btn-outline-secondary">
               I Borrowed
             </button>
@@ -37,7 +58,7 @@ export default function LoansPage() {
         </div>
       </div>
 
-      {/* Table Skeleton */}
+      {/* Table */}
       <div className="card p-3">
 
         <div className="table-responsive">
@@ -57,12 +78,32 @@ export default function LoansPage() {
             </thead>
 
             <tbody>
-              {/* Empty state row */}
-              <tr>
-                <td colSpan={8} className="text-center text-muted py-4">
-                  No loans yet. Add your first loan.
-                </td>
-              </tr>
+
+              {entries.map((entry) => (
+                <React.Fragment key={entry.id}>
+
+                  <tr>
+                    <td>{entry.ref_id}</td>
+                    <td>{entry.name}</td>
+                    <td>{entry.borrower}</td>
+                    <td>{entry.lender}</td>
+                    <td>{entry.amount}</td>
+                    <td>{entry.remaining}</td>
+                    <td>{entry.date}</td>
+                    <td>{entry.status}</td>
+                  </tr>
+
+                  {entry.transaction_type === "group_expense" && (
+                    <tr>
+                      <td colSpan={8}>
+                        <PaymentAllocation />
+                      </td>
+                    </tr>
+                  )}
+
+                </React.Fragment>
+              ))}
+
             </tbody>
 
           </table>
