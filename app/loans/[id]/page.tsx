@@ -5,10 +5,6 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation" // Added search params to support reading existing IDs
 import { supabase } from "@/services/supabase"
 
-export default function SpecificLoanDetailPage() {
-  const { id } = useParams(); 
-  const [entry, setEntry] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 export default function AddLoansPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -58,20 +54,6 @@ export default function AddLoansPage() {
     async function loadLoanAndPayments() {
       if (!activeEntryId) return
       
-      const { data, error } = await supabase
-      .from("entries")
-      .select(`
-        *,
-        borrower:borrower_id(contact_id, name),
-        lender:lender_id(contact_id, name)
-      `)
-      .eq("id", id)
-      .single();
-
-      if (error) {
-        console.error("Error pulling entry details:", error.message);
-      } else {
-        setEntry(data);
       try {
         setLoadingInitialData(true)
         
@@ -459,24 +441,6 @@ export default function AddLoansPage() {
             )}
           </div>
 
-        {entry.notes && (
-          <div className="mt-2 p-3 bg-light rounded text-secondary small">
-            <strong>Internal Notes:</strong> {entry.notes}
-          </div>
-        )}
-      </div>
-
-      {/* ✅ Fixed: borrowerId is now correctly supplied from the entry payload row context */}
-      <PaymentAllocation 
-        loanId={entry.id} 
-        transactionType={entry.transaction_type} 
-        borrowerId={entry.borrower_id ?? entry.borrower?.contact_id}
-      />
-
-      {/* Fallback visual helper if it is an individual expense */}
-      {entry.transaction_type !== "group_expense" && (
-        <div className="card p-4 text-center text-muted border-dashed bg-white">
-          This is an individual expense ({entry.transaction_type.replace("_", " ")}). Group allocation tools are hidden.
         </form>
       </div>
 

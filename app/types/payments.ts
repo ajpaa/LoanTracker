@@ -1,22 +1,22 @@
-export interface Member {
-  contact_id: string; // ✅ Changed from 'id' to match your database column perfectly
+export type Member = {
+  id: string;
   name: string;
-  contact_info?: string;
-  type?: 'person' | 'group';
-}
+  percent?: number; 
 
-export interface Split {
+};
+
+export type Split = {
   memberId: string;
   amount: number;
-  percentage: number;
-  status: string;
-}
+  percent?: number;
+  status?: string;
+};
 
-export interface Item {
+export type Item = {
   id: string;
   description: string;
   status: string;
   totalAmount: number;
   notes?: string;
   splits: Split[];
-}
+};
