@@ -1,66 +1,63 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/services/supabase"
 import { getContacts } from "@/services/contacts"
+
+interface ManualMember {
+  name: string;
+  phone: string;
+}
 
 export default function AddLoansPage() {
   const router = useRouter()
 
-  // Form Field States
+  // Form Field States (Borrower & Lender are back to simple text input strings)
   const [entryName, setEntryName] = useState("")
-  const [transactionType, setTransactionType] = useState("installment_expense");
-  const [borrowerId, setBorrowerId] = useState("")
-  const [lenderId, setLenderId] = useState("")
+  const [transactionType, setTransactionType] = useState("installment_expense")
+  const [borrowerNameInput, setBorrowerNameInput] = useState("")
+  const [lenderNameInput, setLenderNameInput] = useState("")
   const [amountBorrowed, setAmountBorrowed] = useState("")
+  
+  // Group Expense Fields
+  const [groupName, setGroupName] = useState("")
+  const [manualMembers, setManualMembers] = useState<ManualMember[]>([{ name: "", phone: "" }])
+  const [groupMembersSelect, setGroupMembersSelect] = useState<string[]>([]) 
   
   // Installment Specific Fields
   const [paymentStatus, setPaymentStatus] = useState("unpaid")
   const [paymentFrequency, setPaymentFrequency] = useState("Monthly")
-  const [paymentDayMonthly, setPaymentDayMonthly] = useState("1") // Default to 1st of the month
-  const [paymentDayWeekly, setPaymentDayWeekly] = useState("Sunday") // Default to Sunday
+  const [paymentDayMonthly, setPaymentDayMonthly] = useState("1")
+  const [paymentDayWeekly, setPaymentDayWeekly] = useState("Sunday")
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
   const [paymentTerms, setPaymentTerms] = useState("12")
   
-  // Installment UI Tracking Simulation States
-  const [amountPaid, setAmountPaid] = useState(0)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [paymentAmountInput, setPaymentAmountInput] = useState("")
-
   // System State
   const [contacts, setContacts] = useState<any[]>([])
   const [submitting, setSubmitting] = useState(false)
 
-  // Calculate live dynamic totals for progress bar elements
   const totalObligation = parseFloat(amountBorrowed) || 0
-  const calculationPercentage = totalObligation > 0 ? Math.min(Math.round((amountPaid / totalObligation) * 100), 100) : 0
   const installmentsTotalTerms = parseInt(paymentTerms) || 12
   const amountPerTerm = totalObligation > 0 ? (totalObligation / installmentsTotalTerms) : 0
 
-  // Generate an array of strings representing 1st to 28th days for select parameters
   const monthlyDays = Array.from({ length: 28 }, (_, i) => (i + 1).toString())
-  
-  // Weekly days sequence setup array
   const weeklyDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
-  // Fetch registered directory data using the service helper
-  useEffect(() => {
-    async function loadContacts() {
-      try {
-        const data = await getContacts()
-        if (data) {
-          setContacts(data)
-        }
-      } catch (err) {
-        console.error("Error retrieving system contact profiles via service:", err)
-      }
+  async function loadContacts() {
+    try {
+      const data = await getContacts()
+      if (data) setContacts(data)
+    } catch (err) {
+      console.error("Error retrieving contact profiles:", err)
     }
+  }
+
+  useEffect(() => {
     loadContacts()
   }, [])
 
-  // Auto-evaluate "NOT STARTED" state when Start Date shifts into the future
   useEffect(() => {
     const todayStr = new Date().toISOString().split('T')[0]
     if (transactionType === "installment_expense" && startDate > todayStr) {
@@ -70,368 +67,382 @@ export default function AddLoansPage() {
     }
   }, [startDate, transactionType])
 
-  // Handle Form Submission
+  const handleAddManualMember = () => {
+    setManualMembers([...manualMembers, { name: "", phone: "" }])
+  }
+
+  const handleManualMemberChange = (index: number, field: keyof ManualMember, value: string) => {
+    const updated = [...manualMembers]
+    updated[index][field] = value
+    setManualMembers(updated)
+  }
+
+  const handleRemoveManualMember = (index: number) => {
+    const updated = manualMembers.filter((_, i) => i !== index)
+    setManualMembers(updated.length ? updated : [{ name: "", phone: "" }])
+  }
+
+  // Helper function to resolve a contact ID by name (finds existing or creates a new one)
+  async function resolveContactIdByName(nameStr: string): Promise<string> {
+    const cleanedName = nameStr.trim()
+    
+    // Check if name already exists in our loaded system profile lists
+    const matched = contacts.find(c => c.name.toLowerCase() === cleanedName.toLowerCase())
+    if (matched) {
+      return matched.contact_id
+    }
+
+    // Double check directly against database to avoid duplicate records
+    const { data: dbContact, error: fetchError } = await supabase
+      .from("contacts")
+      .select("contact_id")
+      .eq("name", cleanedName)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+    if (dbContact) return dbContact.contact_id
+
+    // If it truly doesn't exist anywhere, register them as a new individual contact profile
+    const { data: newContact, error: insertError } = await supabase
+      .from("contacts")
+      .insert([{ name: cleanedName, type: "person" }])
+      .select()
+      .single()
+
+    if (insertError) throw insertError
+    return newContact.contact_id
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!entryName.trim() || !borrowerId || !lenderId || !amountBorrowed) {
-      alert("Please populate all form parameters before executing query.")
+    if (!entryName.trim() || !borrowerNameInput.trim() || !lenderNameInput.trim() || !amountBorrowed) {
+      alert("Please populate all basic required form fields.")
       return
     }
 
     try {
       setSubmitting(true)
       const parsedAmount = parseFloat(amountBorrowed)
-      const generatedRefId = `LN-${Date.now()}`
 
-      // 1. Build base payload strictly using columns that exist on 'entries'
+      // --- STEP 1: RESOLVE BORROWER AND LENDER IDs FROM TEXT INPUTS ---
+      const activeBorrowerId = await resolveContactIdByName(borrowerNameInput)
+      const activeLenderId = await resolveContactIdByName(lenderNameInput)
+
+      let targetGroupId: string | null = null
+
+      // --- STEP 2: RESOLVE GROUP AND CONTACT MEMBERS IF GROUP EXPENSE ---
+      if (transactionType === "group_expense") {
+        if (!groupName.trim()) {
+          alert("Please provide a group name for group expenses.")
+          setSubmitting(false)
+          return
+        }
+
+        const { data: existingGroup, error: fetchGroupError } = await supabase
+          .from("groups")
+          .select("group_id")
+          .eq("group_name", groupName.trim())
+          .maybeSingle()
+
+        if (fetchGroupError) throw fetchGroupError
+
+        if (existingGroup) {
+          targetGroupId = existingGroup.group_id
+        } else {
+          const { data: groupData, error: groupError } = await supabase
+            .from("groups")
+            .insert([{ group_name: groupName.trim() }])
+            .select()
+            .single()
+
+          if (groupError) throw groupError
+          targetGroupId = groupData.group_id
+        }
+
+        const processedManualIds: string[] = []
+        const validManualMembers = manualMembers.filter(m => m.name.trim() !== "")
+        
+        for (const member of validManualMembers) {
+          const { data: newContact, error: contactError } = await supabase
+            .from("contacts")
+            .insert([{
+              name: member.name.trim(),
+              contact_info: member.phone.trim() || null,
+              type: "person"
+            }])
+            .select()
+            .single()
+
+          if (contactError) throw contactError
+          processedManualIds.push(newContact.contact_id)
+        }
+
+        const absoluteMemberIds = Array.from(new Set([...processedManualIds, ...groupMembersSelect]))
+
+        if (absoluteMemberIds.length > 0) {
+          const membershipPayload = [];
+          for (const mId of absoluteMemberIds) {
+            const { data: dynamicCheck } = await supabase
+              .from("group_memberships")
+              .select("id")
+              .eq("group_id", targetGroupId)
+              .eq("member_id", mId)
+              .maybeSingle()
+
+            if (!dynamicCheck) {
+              membershipPayload.push({
+                group_id: targetGroupId,
+                member_id: mId
+              })
+            }
+          }
+
+          if (membershipPayload.length > 0) {
+            const { error: membershipError } = await supabase
+              .from("group_memberships")
+              .insert(membershipPayload)
+
+            if (membershipError) throw membershipError
+          }
+        }
+      }
+
+      // --- STEP 3: COMMIT THE FINANCIALLY TRACKED ENTRY LEDGER ---
       const basePayload: any = {
-        ref_id: generatedRefId,
         entry_name: entryName.trim(),
         description: entryName.trim(),
         transaction_type: transactionType,
-        borrower_id: borrowerId, 
-        lender_id: lenderId,    
+        borrower_id: activeBorrowerId,
+        lender_id: activeLenderId,    
         amount_borrowed: parsedAmount,
-        amount_remaining: Math.max(parsedAmount - amountPaid, 0), 
+        amount_remaining: parsedAmount, 
         status: paymentStatus.toLowerCase(), 
-        date_borrowed: new Date().toISOString().split('T')[0]
+        date_borrowed: new Date().toISOString().split('T')[0],
+        group_id: targetGroupId
       }
 
-      // Insert base entry and select it back to get the database generated ID
       const { data: insertedEntries, error: entryError } = await supabase
         .from("entries") 
         .insert([basePayload])
         .select()
 
-      if (entryError) {
-        console.error("Supabase Database Insert Error:", entryError.message)
-        alert(`Failed to save loan: ${entryError.message}`)
-        return
-      }
-
+      if (entryError) throw entryError
       const createdEntry = insertedEntries?.[0]
 
-      // 2. If it's an installment, trigger your Postgres function via RPC
+      // --- STEP 4: RUN CALCULATED MATRIX GENERATORS IF APPLICABLE ---
       if (transactionType === "installment_expense" && createdEntry) {
-        const recurrenceDayValue = paymentFrequency === "Monthly" 
-          ? paymentDayMonthly 
-          : paymentDayWeekly
+        const recurrenceDayValue = paymentFrequency === "Monthly" ? paymentDayMonthly : paymentDayWeekly
 
         const { error: rpcError } = await supabase.rpc("generate_installment_schedule", {
           p_entry_id: createdEntry.id,
           p_start_date: startDate,
-          p_frequency: paymentFrequency.toLowerCase(), // matches 'monthly' or 'weekly'
-          p_recurrence_day: recurrenceDayValue,        // passing '1'-'28' or Day string
+          p_frequency: paymentFrequency.toLowerCase(),
+          p_recurrence_day: recurrenceDayValue,
           p_terms: installmentsTotalTerms,
           p_total_amount: parsedAmount,
           p_notes: `Initial schedule for ${entryName.trim()}`
         })
 
         if (rpcError) {
-          console.error("Failed to generate installment matrix schedule:", rpcError.message)
-          alert(`Loan base saved, but schedule generation failed: ${rpcError.message}`)
-          return
+          console.error("Failed to generate installment schedule matrix:", rpcError.message)
+          alert(`Loan recorded, but installment generation failed: ${rpcError.message}`)
         }
       }
 
+      alert("Loan record and profiles updated successfully!")
       router.push("/loans")
       router.refresh()
     } catch (err: any) {
-      console.error("Database exception thrown during transaction creation:", err)
-      alert("Failed to submit new loan ledger item record.")
+      console.error("Database submission error:", err.message)
+      alert(`Submission error: ${err.message}`)
     } finally {
       setSubmitting(false)
     }
   }
 
-  // Handle dynamic sandbox changes for collecting mock payments
-  const handleProcessPaymentMock = (e: React.FormEvent) => {
-    e.preventDefault()
-    const parsedInput = parseFloat(paymentAmountInput)
-    if (!parsedInput || parsedInput <= 0) return
-
-    const totalCalculatedPaid = amountPaid + parsedInput
-    setAmountPaid(totalCalculatedPaid)
-    
-    if (totalCalculatedPaid >= totalObligation) {
-      setPaymentStatus("paid")
-    }
-
-    setShowPaymentModal(false)
-    setPaymentAmountInput("")
-  }
-
-  const handleSkipTermMock = () => {
-    setPaymentStatus("skipped")
-  }
-
   return (
     <div className="container py-4" style={{ maxWidth: "600px" }}>
-      
-      {/* Back Button Navigation */}
       <div className="mb-3">
-        <Link href="/loans" className="text-decoration-none text-secondary">
-          &larr; Back to Loans List
-        </Link>
+        <Link href="/loans" className="text-decoration-none text-secondary small">&larr; Cancel and Go Back</Link>
       </div>
-      
-      {/* Form Input Block */}
-      <div className="card p-4 shadow-sm mb-4">
-        <h3 className="fw-bold mb-1">Add New Loan Entry</h3>
-        <p className="text-muted small mb-4">Log a shared liability item or transaction balancing record.</p>
-
+      <div className="card p-4 shadow-sm border-0 bg-white text-dark">
+        <h2 className="fw-bold mb-4">Create New Loan Account</h2>
         <form onSubmit={handleSubmit}>
           
-          {/* Entry Name */}
           <div className="mb-3">
-            <label className="form-label small fw-bold text-dark">Entry Name / Description</label>
-            <input 
-              type="text"
-              className="form-control"
-              placeholder="e.g., Lunch bill split, Groceries, Cash advance"
-              value={entryName}
-              onChange={(e) => setEntryName(e.target.value)}
-              required
-              disabled={submitting}
-            />
+            <label className="form-label fw-semibold small">Loan Identification / Entry Name</label>
+            <input type="text" className="form-control" required value={entryName} onChange={(e) => setEntryName(e.target.value)} placeholder="e.g., Personal Equipment Finance Term" />
           </div>
 
-          {/* Transaction Type Picker Option */}
-          <div className="mb-3">
-            <label className="form-label small fw-bold text-dark">Transaction Type</label>
-            <select
-              className="form-select text-capitalize"
-              value={transactionType}
-              onChange={(e) => setTransactionType(e.target.value)}
-              required
-              disabled={submitting}
-            >
-              <option value="straight_expense">Straight Expense</option>
-              <option value="installment_expense">Installment Expense</option>
-              <option value="group_expense">Group Expense</option>
-            </select>
-          </div>
-
-          {/* Conditional Layout Section for Installment Parameters */}
-          {transactionType === "installment_expense" && (
-            <div className="p-3 bg-light rounded border mb-3">
-              <h6 className="fw-bold text-secondary mb-3 small text-uppercase tracking-wider">Installment Details</h6>
-              
-              <div className="row g-2">
-                {/* Start Date */}
-                <div className="col-sm-6 mb-2">
-                  <label className="form-label small text-muted mb-1">Start Date</label>
-                  <input 
-                    type="date" 
-                    className="form-control form-control-sm"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    disabled={submitting}
-                  />
-                </div>
-
-                {/* Total Terms */}
-                <div className="col-sm-6 mb-2">
-                  <label className="form-label small text-muted mb-1">Payment Terms (Count)</label>
-                  <input 
-                    type="number" 
-                    className="form-control form-control-sm"
-                    min="1"
-                    value={paymentTerms}
-                    onChange={(e) => setPaymentTerms(e.target.value)}
-                    disabled={submitting}
-                  />
-                </div>
-              </div>
-
-              {/* Payment Frequency Toggles */}
-              <div className="row g-2 mb-2">
-                <div className="col-sm-6">
-                  <label className="form-label small text-muted mb-1">Payment Frequency</label>
-                  <select
-                    className="form-select form-select-sm"
-                    value={paymentFrequency}
-                    onChange={(e) => setPaymentFrequency(e.target.value)}
-                    disabled={submitting}
-                  >
-                    <option value="Monthly">Monthly</option>
-                    <option value="Weekly">Weekly</option>
-                  </select>
-                </div>
-
-                {/* Dynamic Inline Supported Values Target Selection row */}
-                <div className="col-sm-6">
-                  {paymentFrequency === "Monthly" ? (
-                    <>
-                      <label className="form-label small text-muted mb-1">Day of Month (1st - 28th)</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={paymentDayMonthly}
-                        onChange={(e) => setPaymentDayMonthly(e.target.value)}
-                        disabled={submitting}
-                      >
-                        {monthlyDays.map((day) => (
-                          <option key={`month-day-${day}`} value={day}>
-                            {day === "1" ? "1st" : day === "2" ? "2nd" : day === "3" ? "3rd" : `${day}th`} day
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  ) : (
-                    <>
-                      <label className="form-label small text-muted mb-1">Day of Week (Sun - Sat)</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={paymentDayWeekly}
-                        onChange={(e) => setPaymentDayWeekly(e.target.value)}
-                        disabled={submitting}
-                      >
-                        {weeklyDays.map((day) => (
-                          <option key={`week-day-${day}`} value={day}>{day}</option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Enhanced Payment Allocation Status to reflect custom business logic */}
-              <div className="mb-1">
-                <label className="form-label small text-muted mb-1">Payment Allocation Status</label>
-                <select
-                  className="form-select form-select-sm fw-medium text-uppercase text-dark"
-                  value={paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value)}
-                  disabled={submitting}
-                >
-                  <option value="not_started">NOT STARTED (System date &lt; Start Date)</option>
-                  <option value="unpaid">UNPAID (Borrower has not yet paid for term)</option>
-                  <option value="paid">PAID (Borrower has settled term)</option>
-                  <option value="skipped">SKIPPED (Term manually bypassed)</option>
-                  <option value="delinquent">DELINQUENT (Term has lapsed without payment)</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Borrower Dropdown */}
-          <div className="mb-3">
-            <label className="form-label small fw-bold text-dark">Borrower</label>
-            <select 
-              className="form-select"
-              value={borrowerId}
-              onChange={(e) => setBorrowerId(e.target.value)}
-              required
-              disabled={submitting}
-            >
-              <option value="">-- Choose Borrower --</option>
-              {contacts.map((person) => {
-                const idKey = person.contact_id || person.id
-                return (
-                  <option key={`borrower-${idKey}`} value={idKey}>
-                    {person.name}
-                  </option>
-                )
-              })}
-            </select>
-          </div>
-
-          {/* Lender Dropdown */}
-          <div className="mb-3">
-            <label className="form-label small fw-bold text-dark">Lender</label>
-            <select 
-              className="form-select"
-              value={lenderId}
-              onChange={(e) => setLenderId(e.target.value)}
-              required
-              disabled={submitting}
-            >
-              <option value="">-- Choose Lender --</option>
-              {contacts.map((person) => {
-                const idKey = person.contact_id || person.id
-                return (
-                  <option key={`lender-${idKey}`} value={idKey}>
-                    {person.name}
-                  </option>
-                )
-              })}
-            </select>
-          </div>
-
-          {/* Amount Field */}
-          <div className="mb-4">
-            <label className="form-label small fw-bold text-dark">Amount Borrowed</label>
-            <div className="input-group">
-              <span className="input-group-text bg-light text-muted">₱</span>
-              <input 
-                type="number"
-                step="0.01"
-                min="0.01"
+          {/* BACK TO TEXT INPUTS */}
+          <div className="row g-3 mb-3">
+            <div className="col-sm-6">
+              <label className="form-label fw-semibold small">Borrower profile</label>
+              <input
+                type="text"
                 className="form-control"
-                placeholder="0.00"
-                value={amountBorrowed}
-                onChange={(e) => setAmountBorrowed(e.target.value)}
                 required
-                disabled={submitting}
+                placeholder="Type Borrower Name"
+                value={borrowerNameInput}
+                onChange={(e) => setBorrowerNameInput(e.target.value)}
+              />
+            </div>
+
+            <div className="col-sm-6">
+              <label className="form-label fw-semibold small">Lender profile</label>
+              <input
+                type="text"
+                className="form-control"
+                required
+                placeholder="Type Lender Name"
+                value={lenderNameInput}
+                onChange={(e) => setLenderNameInput(e.target.value)}
               />
             </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="d-flex justify-content-end gap-2">
-            <Link href="/loans" className="btn btn-light border">
-              Cancel
-            </Link>
-            <button 
-              type="submit" 
-              className="btn btn-primary px-4" 
-              disabled={submitting}
-            >
-              {submitting ? "Saving Entry..." : "Save Loan"}
-            </button>
-          </div>
-
-        </form>
-      </div>
-
-      {/* Payment Backdrop Modal */}
-      {showPaymentModal && (
-        <div className="modal fade show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }} tabIndex={-1}>
-          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: "380px" }}>
-            <div className="modal-content border-0 shadow">
-              <div className="modal-header py-2 bg-dark text-white">
-                <h6 className="modal-title m-0 fw-bold">Capture Payment Details</h6>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setShowPaymentModal(false)} />
+          <div className="row g-3 mb-3">
+            <div className="col-sm-6">
+              <label className="form-label fw-semibold small">Transaction Structure</label>
+              <select className="form-select" value={transactionType} onChange={(e) => setTransactionType(e.target.value)}>
+                <option value="installment_expense">Installment Expense Matrix</option>
+                <option value="fixed_term_loan">Fixed Term / Single Payout</option>
+                <option value="group_expense">Group Expense</option>
+              </select>
+            </div>
+            <div className="col-sm-6">
+              <label className="form-label fw-semibold small">Principal Amount Borrowed</label>
+              <div className="input-group">
+                <span className="input-group-text">₱</span>
+                <input type="number" step="0.01" className="form-control" required value={amountBorrowed} onChange={(e) => setAmountBorrowed(e.target.value)} placeholder="0.00" />
               </div>
-              <form onSubmit={handleProcessPaymentMock}>
-                <div className="modal-body py-3">
-                  <div className="mb-2">
-                    <label className="form-label small fw-bold text-dark">Amount Tendered</label>
-                    <div className="input-group">
-                      <span className="input-group-text">₱</span>
-                      <input 
-                        type="number" 
-                        className="form-control"
-                        step="0.01" 
-                        required 
-                        placeholder={amountPerTerm > 0 ? amountPerTerm.toFixed(2) : "0.00"}
-                        value={paymentAmountInput}
-                        onChange={(e) => setPaymentAmountInput(e.target.value)}
-                        max={totalObligation - amountPaid}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-footer p-2 bg-light">
-                  <button type="button" className="btn btn-sm btn-light border" onClick={() => setShowPaymentModal(false)}>Close</button>
-                  <button type="submit" className="btn btn-sm btn-primary">Add Payment</button>
-                </div>
-              </form>
             </div>
           </div>
-        </div>
-      )}
 
+          {transactionType === "installment_expense" && (
+            <div className="p-3 bg-light rounded mb-4 border border-info-subtle">
+              <h6 className="fw-bold text-info-emphasis mb-3">Installment Generation Parameters</h6>
+              
+              <div className="row g-2 mb-2">
+                <div className="col-6">
+                  <label className="form-label small mb-1">Payment Frequency</label>
+                  <select className="form-select form-select-sm" value={paymentFrequency} onChange={(e) => setPaymentFrequency(e.target.value)}>
+                    <option value="Monthly">Monthly Cycle</option>
+                    <option value="Weekly">Weekly Cycle</option>
+                  </select>
+                </div>
+                <div className="col-6">
+                  <label className="form-label small mb-1">Total Fixed Terms</label>
+                  <input type="number" className="form-control form-control-sm" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} min="1" />
+                </div>
+              </div>
+
+              <div className="row g-2 mb-2">
+                <div className="col-6">
+                  <label className="form-label small mb-1">Target Start Effective Date</label>
+                  <input type="date" className="form-control form-control-sm" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small mb-1">Recurrence Due Day</label>
+                  {paymentFrequency === "Monthly" ? (
+                    <select className="form-select form-select-sm" value={paymentDayMonthly} onChange={(e) => setPaymentDayMonthly(e.target.value)}>
+                      {monthlyDays.map(day => <option key={day} value={day}>Day {day}</option>)}
+                    </select>
+                  ) : (
+                    <select className="form-select form-select-sm" value={paymentDayWeekly} onChange={(e) => setPaymentDayWeekly(e.target.value)}>
+                      {weeklyDays.map(day => <option key={day} value={day}>{day}</option>)}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-2 text-muted small pt-2 border-top">
+                Estimated Billing Rate: <strong className="text-dark">₱{amountPerTerm.toFixed(2)} / term</strong>
+              </div>
+            </div>
+          )}
+
+          {transactionType === "group_expense" && (
+            <div className="p-3 bg-light rounded mb-4 border border-secondary">
+              <h6 className="fw-bold mb-3">Group Expense Details</h6>
+
+              <div className="mb-3">
+                <label className="form-label small fw-semibold">Group Name</label>
+                <input
+                  type="text"
+                  className="form-control mb-2"
+                  placeholder="e.g., Teamba"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label small fw-semibold">Register New Members with Phone</label>
+                {manualMembers.map((member, index) => (
+                  <div key={index} className="row g-2 mb-2 align-items-center">
+                    <div className="col-5">
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        placeholder="Member Name"
+                        value={member.name}
+                        onChange={(e) => handleManualMemberChange(index, "name", e.target.value)}
+                      />
+                    </div>
+                    <div className="col-5">
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        placeholder="Phone (Optional)"
+                        value={member.phone}
+                        onChange={(e) => handleManualMemberChange(index, "phone", e.target.value)}
+                      />
+                    </div>
+                    <div className="col-2">
+                      <button type="button" className="btn btn-sm btn-outline-danger w-100" onClick={() => handleRemoveManualMember(index)}>
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="btn btn-sm btn-outline-secondary mt-1" onClick={handleAddManualMember}>
+                  + Add Member Row
+                </button>
+              </div>
+
+              <div className="mb-2">
+                <label className="form-label small fw-semibold">Select Existing Contacts Instead</label>
+                <select
+                  multiple
+                  className="form-select text-secondary small"
+                  style={{ height: "120px" }}
+                  value={groupMembersSelect}
+                  onChange={(e) =>
+                    setGroupMembersSelect(
+                      Array.from(e.target.selectedOptions, (o) => o.value)
+                    )
+                  }
+                >
+                  {contacts.map((c) => (
+                    <option key={c.contact_id} value={c.contact_id}>
+                      {c.name} {c.contact_info ? `(${c.contact_info})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <div className="form-text text-muted extra-small">Hold Ctrl (or Cmd) to highlight multiple people.</div>
+              </div>
+            </div>
+          )}
+
+          <div className="d-flex gap-2 justify-content-end mt-4">
+            <Link href="/loans" className="btn btn-light border px-4">Cancel</Link>
+            <button type="submit" className="btn btn-primary px-4" disabled={submitting}>
+              {submitting ? "Processing Database Entry..." : "Commit Loan Ledgers"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

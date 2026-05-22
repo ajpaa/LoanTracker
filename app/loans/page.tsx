@@ -588,12 +588,12 @@ export default function LoansPage() {
                       </span>
                     </td>
                     <td className="text-end">
-                      <button 
-                        onClick={() => handleViewDetails(entry.id)} 
+                      <Link 
+                        href={`/loans/${entry.id}`}
                         className="btn btn-sm btn-outline-dark"
                       >
                         View Details
-                      </button>
+                      </Link>
                     </td>
                   </tr>
                 ))
