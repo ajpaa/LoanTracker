@@ -1,9 +1,10 @@
-import { supabase } from '@/services/supabase'
+'use server';
+import { supabase } from '@/lib/supabase'
 
 export async function getContacts() {
   const { data, error } = await supabase
-    .from('contacts')
-    .select('*')
+    .from('contacts_totals')
+    .select('id, name, contact_info, total_lent, total_borrowed, net_balance, type')
     .order('name', { ascending: true })
 
   if (error) throw error
@@ -19,11 +20,20 @@ export async function createContact(contact: any) {
   return data
 }
 
+export async function createGroup(group: any) {
+  const { data, error } = await supabase
+    .from('group_members')
+    .insert(group)
+    
+  if (error) throw error
+  return data
+}
+
 export async function deleteContact(id: number) {
   const { error } = await supabase
     .from('contacts')
     .delete()
-    .eq('id', id)
+    .eq('contact_id', id)
 
   if (error) throw error
 }
