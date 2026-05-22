@@ -36,13 +36,13 @@ export default function Sidebar() {
         {/* Brand Header */}
         <div className="d-flex align-items-center gap-2.5 px-2 py-1">
           <div className="bg-dark text-white rounded-3 d-flex align-items-center justify-content-center shadow-sm" style={{ width: "38px", height: "38px", borderRadius: "12px" }}>
-            <span className="fw-black" style={{ fontSize: "1.15rem", letterSpacing: "-1px" }}>W</span>
+            <span className="fw-black" style={{ fontSize: "1.15rem", letterSpacing: "-1px" }}>AF</span>
           </div>
           <div>
             <h5 className="fw-black tracking-tight m-0 text-dark" style={{ fontSize: "1.05rem", letterSpacing: "-0.5px" }}>
-              Whale Ledger
+              AuditFlow
             </h5>
-            <span className="text-muted d-block" style={{ fontSize: "0.68rem", fontWeight: 500, letterSpacing: "0.3px" }}>v1.0.4 CORE</span>
+            <span className="text-muted d-block" style={{ fontSize: "0.68rem", fontWeight: 500, letterSpacing: "0.3px" }}>Loan Tracking System</span>
           </div>
         </div>
 
@@ -96,17 +96,6 @@ export default function Sidebar() {
 
       {/* Bottom Section: Aesthetic Widget & Profile Card */}
       <div className="w-100 d-flex flex-column gap-3">
-        
-        {/* Floating Mini Feature Upgrade Card */}
-        <div className="p-3 bg-light border rounded-4 glass-sidebar-widget position-relative overflow-hidden" style={{ borderRadius: "16px", animation: "sideWidgetFloat 5s infinite ease-in-out" }}>
-          <div className="d-flex align-items-center gap-2 mb-1">
-            <Sparkles size={13} className="text-warning" />
-            <span className="fw-bold text-dark" style={{ fontSize: "0.75rem" }}>System Ledger Active</span>
-          </div>
-          <p className="text-muted m-0" style={{ fontSize: "0.68rem", lineHeight: "1.4" }}>
-            Your tracking architecture matches your visual layout engine parameters perfectly.
-          </p>
-        </div>
 
         {/* User Identity Frame */}
         <div className="d-flex align-items-center justify-content-between p-2 rounded-4 bg-white border" style={{ borderRadius: "16px", borderColor: '#E2E8F0' }}>
@@ -115,10 +104,10 @@ export default function Sidebar() {
               className="bg-dark text-white rounded-circle d-flex align-items-center justify-content-center fw-bold border border-2 border-white shadow-sm"
               style={{ width: "36px", height: "36px", fontSize: "0.82rem" }}
             >
-              JL
+              TB
             </div>
             <div style={{ maxWidth: "130px" }}>
-              <h6 className="text-dark fw-bold m-0 text-truncate" style={{ fontSize: "0.82rem" }}>Justine Lea</h6>
+              <h6 className="text-dark fw-bold m-0 text-truncate" style={{ fontSize: "0.82rem" }}>Teamba</h6>
               <span className="text-muted d-block text-truncate" style={{ fontSize: "0.68rem" }}>Developer Account</span>
             </div>
           </div>
