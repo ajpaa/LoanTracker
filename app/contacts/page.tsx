@@ -118,7 +118,7 @@ export default function ContactsPage() {
               </tr>
             ) : (
               contacts.map((c: any) => (
-                <tr key={c.id}>
+                <tr key={c.contact_id || c.id}>
                   <td>{c.name}</td>
                   <td>{c.contact_info}</td>
                   <td>{c.total_lent}</td>
@@ -154,6 +154,88 @@ export default function ContactsPage() {
         </table>
 
       </div>
+
+      {/* INLINE BOOTSTRAP MODAL DIALOG POPUP LAYER */}
+      {isModalOpen && (
+        <div className="modal d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '450px' }}>
+            <div className="modal-content">
+              
+              <div className="modal-header">
+                <h5 className="modal-title fw-bold">Add New Contact</h5>
+                <button type="button" className="btn-close" onClick={() => setIsModalOpen(false)}></button>
+              </div>
+
+              <form onSubmit={handleAddContactSubmit}>
+                <div className="modal-body">
+                  
+                  {/* Field Module 1: Name */}
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Name</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="e.g., Juan dela Cruz"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      disabled={submitting}
+                    />
+                  </div>
+
+                  {/* Field Module 2: Contact Info */}
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">Contact Info</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="e.g., 09171234567"
+                      value={contactInfo}
+                      onChange={(e) => setContactInfo(e.target.value)}
+                      required
+                      disabled={submitting}
+                    />
+                  </div>
+
+                  {/* Field Module 3: Type Selector */}
+                  <div className="mb-2">
+                    <label className="form-label small fw-semibold">Type</label>
+                    <select 
+                      className="form-select"
+                      value={type}
+                      onChange={(e) => setType(e.target.value)}
+                      disabled={submitting}
+                    >
+                      <option value="person">Person</option>
+                      <option value="organization">Organization</option>
+                    </select>
+                  </div>
+
+                </div>
+
+                <div className="modal-footer">
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => setIsModalOpen(false)}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary" 
+                    disabled={submitting}
+                  >
+                    {submitting ? "Saving..." : "Save Contact"}
+                  </button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
