@@ -372,6 +372,33 @@ export default function AddLoansPage() {
             processedMemberIds.push(memberId)
           }
         }
+        // Link the borrower contact to this group
+        const { error: groupRefError } = await supabase
+          .from("contacts")
+          .update({ group_ref: targetGroupId })
+          .eq("contact_id", activeBorrowerId)
+
+        if (groupRefError) throw groupRefError
+        
+
+        const processedManualIds: string[] = []
+        const validManualMembers = manualMembers.filter(m => m.name.trim() !== "")
+        
+        for (const member of validManualMembers) {
+        const { data: newContact, error: contactError } = await supabase
+          .from("contacts")
+          .insert([{
+            name: member.name.trim(),
+            contact_info: member.phone.trim() || null,
+            type: "person",
+            group_ref: targetGroupId  // ADD THIS
+          }])
+          .select()
+          .single()
+
+        if (contactError) throw contactError
+        processedManualIds.push(newContact.contact_id)
+      }
 
         if (processedMemberIds.length > 0 && targetGroupId) {
           const membershipPayload = []

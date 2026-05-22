@@ -735,9 +735,10 @@ export default function LoanDetailsPage() {
           loanId={entry.id}
           transactionType={entry.transaction_type}
           borrowerId={entry.borrower_id ?? entry.borrower?.contact_id}
+          amountBorrowed={Number(entry.amount_borrowed) || 0}
+          
         />
       )}
-
       {entry && entry.transaction_type !== "group_expense" && (
         <div className="card p-3 text-center text-muted border-dashed bg-white mb-4 small">
           This is an individual expense ({transactionType.replace("_", " ")}). Group allocation tools are hidden.
