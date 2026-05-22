@@ -1,224 +1,189 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import AddItemForm from "@/app/components/payment/addItemForm";
 import PaymentList from "@/app/components/payment/paymentList";
-import { Item, Member, PaymentStatus } from "@/app/types/payments";
-import { supabase } from "@/services/supabase";
+
+import {
+  Item,
+  Member,
+} from "@/app/types/payments";
+
+import {
+  getMembers,
+  getEntries,
+  getAllocations,
+  createPaymentEntry,
+  createPaymentAllocations,
+} from "@/services/payment.service";
 
 interface PaymentAllocationProps {
-  loanId: string;
-  transactionType: string;
-  borrowerId?: string;
+  loanId?: string | number;
 }
 
-export default function PaymentAllocation({ loanId, transactionType, borrowerId = "" }: PaymentAllocationProps) {
+export default function PaymentAllocation({ loanId }: PaymentAllocationProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [showAddItem, setShowAddItem] = useState(false);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-  const [loadingItems, setLoadingItems] = useState(false);
-  const [dbError, setDbError] = useState<string | null>(null);
-
-  const isGroupExpense = transactionType === "group_expense";
 
   async function loadMembers() {
-    if (!borrowerId) { setMembers([]); return; }
-    setLoadingMembers(true);
-    setDbError(null);
-    try {
-      console.log("=== loadMembers called ===");
-      console.log("borrowerId:", borrowerId);
+    const { data, error } = await getMembers();
 
-      const { data: memberships, error: e1 } = await supabase
-        .from("group_memberships")
-        .select("member_id")
-        .eq("group_id", borrowerId);
-
-      console.log("memberships:", memberships);
-      console.log("memberships error:", e1);
-
-      if (e1) throw e1;
-      if (!memberships?.length) { setMembers([]); return; }
-
-      const ids = memberships.map((r: any) => r.member_id);
-      console.log("member ids:", ids);
-
-      const { data: contacts, error: e2 } = await supabase
-        .from("contacts")
-        .select("contact_id, name")
-        .in("contact_id", ids);
-
-      console.log("contacts:", contacts);
-      console.log("contacts error:", e2);
-
-      if (e2) throw e2;
-      setMembers((contacts ?? []).map((c: any) => ({ id: c.contact_id, name: c.name })));
-    } catch (err: any) {
-      console.error("loadMembers failed:", err);
-      setDbError(err.message || "Failed to load members.");
-    } finally {
-      setLoadingMembers(false);
-    }
-  }
-
-  async function loadItems() {
-    if (!loanId) return;
-    setLoadingItems(true);
-    try {
-      const { data, error } = await supabase
-        .from("payment_allocations")
-        .select("*")
-        .eq("entry_id", loanId);
-      if (error) throw error;
-      if (!data || data.length === 0) { setItems([]); return; }
-
-      const grouped: Record<string, Item> = {};
-      data.forEach((row: any) => {
-        const key = row.description.trim();
-        if (!grouped[key]) {
-          grouped[key] = { id: row.id, description: key, totalAmount: 0, notes: row.notes || "", status: "unpaid", splits: [] };
-        }
-        grouped[key].totalAmount += Number(row.amount || 0);
-        grouped[key].splits.push({ memberId: row.payee_id, amount: Number(row.amount || 0), percentage: 0, status: row.status as PaymentStatus });
-      });
-
-      Object.values(grouped).forEach((item) => {
-        item.splits = item.splits.map((s) => ({
-          ...s,
-          percentage: item.totalAmount > 0 ? (s.amount / item.totalAmount) * 100 : 0,
-        }));
-        const statuses = item.splits.map((s) => s.status);
-        if (statuses.every((s) => s === "paid")) item.status = "paid";
-        else if (statuses.some((s) => s === "paid" || s === "partially_paid")) item.status = "partially_paid";
-        else item.status = "unpaid";
-      });
-
-      setItems(Object.values(grouped));
-    } catch (err: any) {
-      setDbError(err.message || "Failed to load allocations.");
-    } finally {
-      setLoadingItems(false);
-    }
-  }
-
-  async function handleSave(
-  description: string,
-  amount: number,
-  notes: string | undefined,
-  splits: { memberId: string; amount: number; percentage: number }[]
-) {
-  try {
-    console.log("handleSave splits:", splits); // debug
-
-    const safeSplits = Array.isArray(splits) ? splits : [];
-    if (safeSplits.length === 0) {
-      alert("No splits provided.");
+    if (error) {
+      console.log("getMembers error:", error);
       return;
     }
 
-    const rows = safeSplits.map((s) => ({
-      entry_id: loanId,
-      description: description.trim(),
-      payee_id: s.memberId,
-      amount: s.amount,
-      notes: notes || null,
+    setMembers((data ?? []) as Member[]);
+  }
+
+  async function fetchData() {
+    const [{ data: entries }, { data: allocations }] =
+      await Promise.all([
+        getEntries(),
+        getAllocations(),
+      ]);
+
+    // Filter down calculations if we are locked into a specific loan
+    const filteredEntries = loanId 
+      ? (entries ?? []).filter((entry) => String(entry.id) === String(loanId))
+      : (entries ?? []);
+
+    const formatted: Item[] = filteredEntries.map((entry) => {
+      const related = (allocations ?? []).filter(
+        (a) => a.entry_id === entry.id
+      );
+
+      return {
+        id: entry.id,
+        description: entry.description,
+        status: entry.status ?? "unpaid",
+        totalAmount: related.reduce(
+          (s, r) => s + Number(r.amount),
+          0
+        ),
+        notes: related?.[0]?.notes ?? "",
+        splits: related.map((r) => ({
+          memberId: r.payee_id,
+          amount: Number(r.amount),
+        })),
+      };
+    });
+
+    setItems(formatted);
+  }
+
+  async function addItem(
+    desc: string,
+    amount: number,
+    memberIds: string[],
+    notes?: string
+  ) {
+    if (!memberIds.length) return;
+
+    const share = amount / memberIds.length;
+    let activeEntryId = loanId;
+
+    // If we are NOT inside a specific loan page, generate a new master entry first
+    if (!activeEntryId) {
+      const { data: entry, error } = await createPaymentEntry({
+        ref_id: "LN-" + Date.now(),
+        entry_name: desc,
+        description: desc,
+        transaction_type: "group_expense",
+        borrower_id: memberIds[0],
+        lender_id: memberIds[0],
+        amount_borrowed: amount,
+        amount_remaining: amount,
+        status: "unpaid",
+      });
+
+      if (error || !entry) return;
+      activeEntryId = entry.id;
+    }
+
+    // Map your individual participant splits safely back to the master ID reference
+    const allocations = memberIds.map((mid) => ({
+      entry_id: activeEntryId,
+      payee_id: mid,
+      amount: share,
+      description: desc,
+      notes: notes ?? null,
       status: "unpaid",
     }));
 
-    const { error } = await supabase.from("payment_allocations").insert(rows);
-    if (error) throw error;
-    await loadItems();
-    setShowAddItem(false);
-  } catch (err: any) {
-    alert(`Save failed: ${err.message}`);
-  }
-}
+    await createPaymentAllocations(allocations);
 
-  async function handleStatusChange(description: string, memberId: string, newStatus: PaymentStatus) {
-    try {
-      const { error } = await supabase
-        .from("payment_allocations")
-        .update({ status: newStatus })
-        .eq("entry_id", loanId)
-        .eq("description", description)
-        .eq("payee_id", memberId);
-      if (error) throw error;
-      await loadItems();
-    } catch (err: any) {
-      alert(`Status update failed: ${err.message}`);
-    }
+    // Refresh view lists
+    fetchData();
+
+    // Reset tracking flag
+    setShowAddItem(false);
   }
 
   useEffect(() => {
-    console.log("=== useEffect triggered ===");
-    console.log("isGroupExpense:", isGroupExpense);
-    console.log("loanId:", loanId);
-    console.log("borrowerId:", borrowerId);
-    console.log("transactionType:", transactionType);
-    if (isGroupExpense) {
-      loadMembers();
-      loadItems();
-    }
-  }, [loanId, borrowerId, transactionType]);
+    loadMembers();
+    fetchData();
+  }, [loanId]);
 
-  const grandTotal = useMemo(() => items.reduce((s, i) => s + i.totalAmount, 0), [items]);
-
-  if (!isGroupExpense) return null;
+  const grandTotal = useMemo(
+    () =>
+      items.reduce(
+        (s, i) => s + (i.totalAmount || 0),
+        0
+      ),
+    [items]
+  );
 
   return (
-    <div className="card shadow-sm border-0 p-4 bg-white mt-4">
-      {dbError && (
-        <div className="alert alert-danger py-2 px-3 small mb-3 border-0">
-          <strong>Error:</strong> {dbError}
-        </div>
-      )}
-
-      {!borrowerId && (
-        <div className="alert alert-warning py-2 px-3 small mb-3 border-0">
-          No group ID provided.
-        </div>
-      )}
+    <div className="container py-4 px-0">
 
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <h4 className="mb-1 text-dark fw-bold">Payment Allocation</h4>
-          <p className="text-muted small mb-0">Itemized breakdown per group member</p>
-        </div>
+        <h5 className="mb-0 fw-bold">Allocations Control Dashboard</h5>
+        
+        {/* The component exposes the button globally or contextually */}
         <button
-          className="btn btn-dark btn-sm px-3"
+          className="btn btn-dark btn-sm"
           onClick={() => setShowAddItem(true)}
-          disabled={members.length === 0 || showAddItem}
         >
-          + Add Item
+          + Add Split Allocation
         </button>
       </div>
 
+      {/* Add Item Splitting Context Canvas Overlay Form */}
       {showAddItem && (
-        <div className="card p-4 mb-4 bg-light border border-secondary-subtle">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <h6 className="mb-0 text-dark fw-bold text-uppercase small">Configure Split</h6>
-            <button className="btn-close" onClick={() => setShowAddItem(false)} />
+        <div className="card p-3 mb-3 bg-light border">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h6 className="mb-0 text-secondary small fw-bold">Configure Member Splits</h6>
+            <button 
+              className="btn-close" 
+              style={{ fontSize: "12px" }} 
+              onClick={() => setShowAddItem(false)}
+            ></button>
           </div>
-          <AddItemForm members={members} onCancel={() => setShowAddItem(false)} onSave={handleSave} />
+          <AddItemForm
+            members={members}
+            onSave={(desc, amount, memberIds, notes) => {
+              addItem(desc, amount, memberIds, notes);
+            }}
+          />
         </div>
       )}
 
-      {loadingMembers || loadingItems ? (
-        <div className="text-center text-muted small py-3">Loading...</div>
-      ) : members.length === 0 ? (
-        <div className="alert alert-warning small py-3 mb-0 border-0">
-          <h6 className="fw-semibold">⚠️ No Members Found</h6>
-          <p className="mb-1">No members mapped in <code>group_memberships</code> for this group.</p>
-          <p className="mb-0 font-monospace small text-secondary">Group ID: {borrowerId || "—"}</p>
-        </div>
-      ) : (
-        <PaymentList items={items} members={members} onStatusChange={handleStatusChange} />
-      )}
+      <PaymentList
+        items={items}
+        members={members}
+      />
 
-      <div className="mt-3 text-end fs-5 fw-bold text-dark border-top pt-3">
-        Total: ₱{grandTotal.toFixed(2)}
+      <div className="mt-3 fw-bold text-end text-dark">
+        Total Splitting Obligation: ₱{grandTotal.toFixed(2)}
       </div>
+
     </div>
   );
 }
