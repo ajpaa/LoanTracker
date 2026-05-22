@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/services/supabase'
 
 export async function getContacts() {
   const { data, error } = await supabase
