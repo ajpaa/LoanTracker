@@ -23,44 +23,50 @@ export default function PaymentAllocation({ loanId, transactionType, borrowerId 
   const isGroupExpense = transactionType === "group_expense";
 
   async function loadMembers() {
-    if (!borrowerId) { setMembers([]); return; }
-    setLoadingMembers(true);
-    setDbError(null);
-    try {
-      console.log("=== loadMembers called ===");
-      console.log("borrowerId:", borrowerId);
+  if (!borrowerId) { setMembers([]); return; }
+  setLoadingMembers(true);
+  setDbError(null);
+  try {
+    // Step 1: get the real groups.group_id from this contact
+    const { data: contact, error: e0 } = await supabase
+      .from("contacts")
+      .select("group_ref")
+      .eq("contact_id", borrowerId)
+      .single();
 
-      const { data: memberships, error: e1 } = await supabase
-        .from("group_memberships")
-        .select("member_id")
-        .eq("group_id", borrowerId);
-
-      console.log("memberships:", memberships);
-      console.log("memberships error:", e1);
-
-      if (e1) throw e1;
-      if (!memberships?.length) { setMembers([]); return; }
-
-      const ids = memberships.map((r: any) => r.member_id);
-      console.log("member ids:", ids);
-
-      const { data: contacts, error: e2 } = await supabase
-        .from("contacts")
-        .select("contact_id, name")
-        .in("contact_id", ids);
-
-      console.log("contacts:", contacts);
-      console.log("contacts error:", e2);
-
-      if (e2) throw e2;
-      setMembers((contacts ?? []).map((c: any) => ({ id: c.contact_id, name: c.name })));
-    } catch (err: any) {
-      console.error("loadMembers failed:", err);
-      setDbError(err.message || "Failed to load members.");
-    } finally {
-      setLoadingMembers(false);
+    if (e0) throw e0;
+    
+    const actualGroupId = contact?.group_ref;
+    if (!actualGroupId) {
+      setDbError("This contact has no linked group.");
+      setMembers([]);
+      return;
     }
+
+    // Step 2: query group_memberships with the correct group_id
+    const { data: memberships, error: e1 } = await supabase
+      .from("group_memberships")
+      .select("member_id")
+      .eq("group_id", actualGroupId);
+
+    if (e1) throw e1;
+    if (!memberships?.length) { setMembers([]); return; }
+
+    const ids = memberships.map((r: any) => r.member_id);
+
+    const { data: contacts, error: e2 } = await supabase
+      .from("contacts")
+      .select("contact_id, name")
+      .in("contact_id", ids);
+
+    if (e2) throw e2;
+    setMembers((contacts ?? []).map((c: any) => ({ id: c.contact_id, name: c.name })));
+  } catch (err: any) {
+    setDbError(err.message || "Failed to load members.");
+  } finally {
+    setLoadingMembers(false);
   }
+}
 
   async function loadItems() {
     if (!loanId) return;
