@@ -7,24 +7,23 @@ import { supabase } from "@/services/supabase";
 import PaymentAllocation from "@/app/components/payment/paymentAllocation";
 
 export default function SpecificLoanDetailPage() {
-  const { id } = useParams(); // Safely extract the UUID from the dynamic route
+  const { id } = useParams(); 
   const [entry, setEntry] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showAllocations, setShowAllocations] = useState(false); // Toggle state for button
 
   useEffect(() => {
     async function fetchDetailedEntry() {
       if (!id) return;
       
       const { data, error } = await supabase
-        .from("entries")
-        .select(`
-          *,
-          borrower:borrower_id(name),
-          lender:lender_id(name)
-        `)
-        .eq("id", id)
-        .single();
+      .from("entries")
+      .select(`
+        *,
+        borrower:borrower_id(contact_id, name),
+        lender:lender_id(contact_id, name)
+      `)
+      .eq("id", id)
+      .single();
 
       if (error) {
         console.error("Error pulling entry details:", error.message);
@@ -105,34 +104,23 @@ export default function SpecificLoanDetailPage() {
         </div>
 
         {entry.notes && (
-          <div className="mt-2 p-3 bg-light rounded text-secondary small mb-3">
+          <div className="mt-2 p-3 bg-light rounded text-secondary small">
             <strong>Internal Notes:</strong> {entry.notes}
-          </div>
-        )}
-
-        {/* Interactive Payment Allocation Toggle Button */}
-        {entry.transaction_type === "group_expense" && (
-          <div className="pt-3 border-top mt-2">
-            <button
-              className={`btn ${showAllocations ? "btn-outline-danger" : "btn-dark"} d-inline-flex align-items-center gap-2`}
-              onClick={() => setShowAllocations(!showAllocations)}
-            >
-              {showAllocations ? "Hide Payment Allocation" : "Manage Payment Allocation"}
-            </button>
           </div>
         )}
       </div>
 
-      {/* Conditional Rendering Area controlled by the button toggle */}
-      {entry.transaction_type === "group_expense" ? (
-        showAllocations && (
-          <div className="fade-in animate">
-            <PaymentAllocation loanId={entry.id} />
-          </div>
-        )
-      ) : (
+      {/* ✅ Fixed: borrowerId is now correctly supplied from the entry payload row context */}
+      <PaymentAllocation 
+        loanId={entry.id} 
+        transactionType={entry.transaction_type} 
+        borrowerId={entry.borrower_id ?? entry.borrower?.contact_id}
+      />
+
+      {/* Fallback visual helper if it is an individual expense */}
+      {entry.transaction_type !== "group_expense" && (
         <div className="card p-4 text-center text-muted border-dashed bg-white">
-          This is an individual expense ({entry.transaction_type.replace("_", " ")}). Group allocation tools are disabled.
+          This is an individual expense ({entry.transaction_type.replace("_", " ")}). Group allocation tools are hidden.
         </div>
       )}
     </div>
