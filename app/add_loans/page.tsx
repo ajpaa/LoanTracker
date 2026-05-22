@@ -382,7 +382,7 @@ export default function AddLoansPage() {
         
 
         const processedManualIds: string[] = []
-        const validManualMembers = manualMembers.filter(m => m.name.trim() !== "")
+        // const validManualMembers = manualMembers.filter(m => m.name.trim() !== "")
         
         for (const member of validManualMembers) {
         const { data: newContact, error: contactError } = await supabase
