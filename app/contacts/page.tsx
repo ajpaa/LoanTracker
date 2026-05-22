@@ -39,7 +39,7 @@ export default function ContactsPage() {
     const newContact = {
       name,
       contact_info: contactInfo,
-      type: 'person'
+      type: isGroupMember ? 'group' : 'independent'
     }
 
     try {
@@ -121,7 +121,7 @@ export default function ContactsPage() {
                         Person ({c.member_of_group}) 👤
                       </button>
                     ) : (
-                      <span className="text-capitalize text-muted">{c.type}</span>
+                      <span className="badge bg-secondary">{c.type === 'group' ? 'Group Member' : 'Independent'}</span>
                     )}
                   </td>
                   <td>
