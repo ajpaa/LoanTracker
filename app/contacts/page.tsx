@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getContacts, createContact, deleteContact, createGroupMembership, getAvailableGroups, updateContact } from '@/services/contacts'
+import Link from 'next/link'
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([])
@@ -95,15 +96,22 @@ export default function ContactsPage() {
   return (
     <div className="container py-4">
 
+      
+
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1>Contacts</h1>
-        <button
-          className="btn btn-primary"
-          onClick={() => setIsModalOpen(true)}
-        >
-          + Add Contact
-        </button>
+        <div className="d-flex gap-2">
+          <Link href="/groups" className="btn btn-outline-secondary">
+            👥 Groups
+          </Link>
+          <button
+            className="btn btn-primary"
+            onClick={() => setIsModalOpen(true)}
+          >
+            + Add Contact
+          </button>
+        </div>
       </div>
 
       {/* Table */}
