@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation" 
 import { supabase } from "@/services/supabase"
 import PaymentAllocation from "../../components/payment/paymentAllocation" 
+import "./loanDetails.css"
 
 interface StorageFile {
   name: string
@@ -555,7 +556,7 @@ export default function LoanDetailsPage() {
   }
 
   return (
-    <div className="container py-4" style={{ maxWidth: "680px" }}>
+    <div className="container py-4 loan-page" style={{ maxWidth: "680px" }}>
 
       <div className="mb-3">
         <Link href="/loans" className="text-decoration-none text-secondary">
@@ -564,7 +565,7 @@ export default function LoanDetailsPage() {
       </div>
 
       {/* --- MAIN PROFILE COMPONENT --- */}
-      <div className="card p-4 shadow-sm mb-4 position-relative bg-white">
+      <div className="loan-card card p-4 shadow-sm mb-4 position-relative bg-white">
         
         <div className="position-absolute" style={{ top: "1.5rem", right: "1.5rem" }}>
           <span className={`badge text-uppercase px-2.5 py-1.5 small fw-bold tracking-wide ${
@@ -573,7 +574,7 @@ export default function LoanDetailsPage() {
           }`}>{paymentStatus.replace('_', ' ')}</span>
         </div>
 
-        <h3 className="fw-bold mb-1 pe-5">Loan Overview</h3>
+        <h3 className="loan-title fw-bold mb-1 pe-5">Loan Overview</h3>
         <p className="text-muted small mb-4">
           Overview profile of the saved shared liability balancing record.
         </p>
@@ -791,7 +792,7 @@ export default function LoanDetailsPage() {
           <div className="d-flex gap-2">
             <button
               type="button"
-              className="btn btn-outline-primary btn-sm flex-grow-1"
+              className="payment-btn btn btn-outline-primary btn-sm flex-grow-1"
               onClick={handleOpenPaymentModal}
               disabled={amountBorrowed === 0 || paymentStatus === 'fully_paid' || paymentStatus === 'paid'}
             >
@@ -799,7 +800,7 @@ export default function LoanDetailsPage() {
             </button>
             <button
               type="button"
-              className="btn btn-outline-warning btn-sm flex-grow-1"
+              className="payment-btn btn btn-outline-primary btn-sm flex-grow-1"
               onClick={handleManualSkipTerm}
               disabled={paymentStatus === 'fully_paid' || paymentStatus === 'paid' || currentTermStatus === 'SKIPPED'}
             >
@@ -860,7 +861,7 @@ export default function LoanDetailsPage() {
               const logProofs = log.proof_urls || []
               return (
                 /* Individual Dedicated Box Container per Transaction Instance */
-                <div key={log.id} className="card p-3 shadow-sm bg-white border">
+                <div key={log.id} className="history-card card p-3 shadow-sm bg-white border">
                   
                   {/* Clean Form List Configuration */}
                   <div className="list-group list-group-flush">
