@@ -31,4 +31,8 @@ export async function getGroupsWithMembers() {
       .filter((m) => m.group_id === g.group_id)
       .map((m) => m.contacts)
   }));
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> princess-test

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation" 
 import { supabase } from "@/services/supabase"
 import PaymentAllocation from "../../components/payment/paymentAllocation" 
+import "./loanDetails.css"
 
 interface StorageFile {
   name: string
@@ -740,14 +741,15 @@ if (targetTerm > currentDateDrivenTerm) {
   }
 
   return (
-    <div className="container py-4" style={{ maxWidth: "680px" }}>
+    <div className="container py-4 loan-page" style={{ maxWidth: "680px" }}>
 
       <div className="mb-3">
         <Link href="/loans" className="text-decoration-none text-secondary">&larr; Back to Loans List</Link>
       </div>
 
-      {/* MAIN PROFILE CARD */}
-      <div className="card p-4 shadow-sm mb-4 position-relative bg-white">
+      {/* --- MAIN PROFILE COMPONENT --- */}
+      <div className="loan-card card p-4 shadow-sm mb-4 position-relative bg-white">
+        
         <div className="position-absolute" style={{ top: "1.5rem", right: "1.5rem" }}>
           <span className={`badge text-uppercase px-2 py-1 small fw-bold ${
             paymentStatus === 'fully_paid' || paymentStatus === 'paid' ? 'bg-success text-white' :
@@ -755,8 +757,10 @@ if (targetTerm > currentDateDrivenTerm) {
           }`}>{paymentStatus.replace('_', ' ')}</span>
         </div>
 
-        <h3 className="fw-bold mb-1 pe-5">Loan Overview</h3>
-        <p className="text-muted small mb-4">Overview profile of the saved shared liability balancing record.</p>
+        <h3 className="loan-title fw-bold mb-1 pe-5">Loan Overview</h3>
+        <p className="text-muted small mb-4">
+          Overview profile of the saved shared liability balancing record.
+        </p>
 
         <div className="text-center py-4 mb-2 border-bottom">
           <div className="text-uppercase text-secondary small mb-1" style={{ fontSize: "11px" }}>Amount Borrowed</div>
@@ -913,7 +917,7 @@ if (targetTerm > currentDateDrivenTerm) {
           <div className="d-flex gap-2">
             <button
               type="button"
-              className="btn btn-outline-primary btn-sm flex-grow-1"
+              className="payment-btn btn btn-outline-primary btn-sm flex-grow-1"
               onClick={handleOpenPaymentModal}
               disabled={allTermsSettled || paymentStatus === 'paid'}
             >
@@ -921,7 +925,7 @@ if (targetTerm > currentDateDrivenTerm) {
             </button>
             <button
               type="button"
-              className="btn btn-outline-warning btn-sm flex-grow-1"
+              className="payment-btn btn btn-outline-primary btn-sm flex-grow-1"
               onClick={handleManualSkipTerm}
               disabled={allTermsSettled || paymentStatus === 'paid'}
             >
