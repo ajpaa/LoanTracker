@@ -5,9 +5,9 @@ export async function getGroupsWithMembers() {
   const { data: groups, error: groupsError } = await supabase
     .from('groups')
     .select('group_id, group_name')
-    .order('group_name', { ascending: true });
+    .order('group_name', { ascending: true })
 
-  if (groupsError) throw groupsError;
+  if (groupsError) throw groupsError
 
   // 2. Get all memberships joined with contact details
   const { data: memberships, error: membershipsError } = await supabase
@@ -20,9 +20,9 @@ export async function getGroupsWithMembers() {
         name,
         contact_info
       )
-    `);
+    `)
 
-  if (membershipsError) throw membershipsError;
+  if (membershipsError) throw membershipsError
 
   // 3. Merge: attach members to their group
   return (groups || []).map((g) => ({
@@ -30,9 +30,5 @@ export async function getGroupsWithMembers() {
     members: (memberships || [])
       .filter((m) => m.group_id === g.group_id)
       .map((m) => m.contacts)
-  }));
-<<<<<<< HEAD
+  }))
 }
-=======
-}
->>>>>>> princess-test

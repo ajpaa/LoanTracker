@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/services/supabase"
-import { getContacts } from "@/services/contacts"
+import { getContacts, getAvailableGroups } from "@/services/contacts"
 
 interface ManualMember {
   name: string;
@@ -33,6 +33,7 @@ export default function AddLoansPage() {
   // Group Expense Fields
   const [groupName, setGroupName] = useState("")
   const [manualMembers, setManualMembers] = useState<ManualMember[]>([{ name: "", phone: "" }])
+  const [originalGroupMembers, setOriginalGroupMembers] = useState<string[]>([])
   
   // Installment Specific Fields
   const [paymentStatus, setPaymentStatus] = useState("unpaid")
@@ -44,6 +45,7 @@ export default function AddLoansPage() {
   
   // System State
   const [contacts, setContacts] = useState<any[]>([])
+  const [groups, setGroups] = useState<any[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   // Custom Modern Modal UI State
@@ -55,7 +57,12 @@ export default function AddLoansPage() {
   })
 
   // Custom Dropdown Active UI State
-  const [activeDropdown, setActiveDropdown] = useState<{ field: "borrower" | "lender" | "group" | "bulk_members" | number | null }>({ field: null })
+  const [activeDropdown, setActiveDropdown] = useState<{
+  field: "group" | "borrower" | "lender" | "bulk_members" | "member_row" | null
+  index?: number
+}>({
+  field: null,
+})
   
   // Inline Multi-select search query string
   const [bulkSearchQuery, setBulkSearchQuery] = useState("")
@@ -117,26 +124,41 @@ export default function AddLoansPage() {
     loadContacts()
   }, [])
 
+  useEffect(() => {
+  async function loadGroups() {
+    try {
+      const data = await getAvailableGroups()
+      setGroups(data || [])
+    } catch (err) {
+      console.error("Error loading groups:", err)
+    }
+  }
+
+  loadGroups()
+}, [])
+
   // --- AUTOFILL MEMBERS WHEN EXISTING GROUP IS SELECTED ---
   useEffect(() => {
     async function fetchGroupMemberships() {
       if (transactionType !== "group_expense" || !groupName.trim()) return
 
-      const matchedGroupContact = contacts.find(
-        c => c.type === "group" && c.name.toLowerCase() === groupName.trim().toLowerCase()
-      )
-      if (!matchedGroupContact) return
+      const matchedGroup = groups.find(
+  g => g.group_name.toLowerCase() === groupName.trim().toLowerCase()
+)
+
+      if (!matchedGroup) return
 
       try {
         const { data: groupRows, error: groupErr } = await supabase
           .from("groups")
           .select("group_id")
-          .eq("group_name", matchedGroupContact.name)
+          .eq("group_name", matchedGroup.group_name)
 
         if (groupErr || !groupRows || groupRows.length === 0) return
         const groupRow = groupRows[0]
 
         const { data: memberships, error: memErr } = await supabase
+        
           .from("group_memberships")
           .select(`
             member_id,
@@ -147,13 +169,38 @@ export default function AddLoansPage() {
           `)
           .eq("group_id", groupRow.group_id)
 
+          const lenderInGroup = memberships?.some((m: any) => {
+  const contact = Array.isArray(m.contacts) ? m.contacts[0] : m.contacts
+  return contact?.name?.toLowerCase() === lenderNameInput.trim().toLowerCase()
+})
+
+if (lenderInGroup && lenderNameInput.trim() !== "") {
+  triggerModal(
+    "warning",
+    "Invalid Group Selection",
+    `The lender "${lenderNameInput}" is already a member of "${groupName}". You cannot select this group.`
+  )
+
+  setGroupName("")
+  setManualMembers([{ name: "", phone: "" }])
+  setActiveDropdown({ field: null })
+
+  return
+}
+
         if (memErr || !memberships) return
 
-        const formattedMembers: ManualMember[] = memberships.map((m: any) => ({
-          name: m.contacts?.name || "",
-          phone: m.contacts?.contact_info || "",
-          contact_id: m.member_id
-        })).filter(m => m.name !== "")
+        const formattedMembers: ManualMember[] = memberships
+  .map((m: any) => {
+    const contact = Array.isArray(m.contacts) ? m.contacts[0] : m.contacts
+
+    return {
+      name: contact?.name || "",
+      phone: contact?.contact_info || "",
+      contact_id: m.member_id
+    }
+  })
+  .filter(m => m.name)
 
         // IDENTITY INTERCEPTOR: Verify if any group member matches the selected Lender
         const hasLenderInGroup = formattedMembers.some(
@@ -164,16 +211,19 @@ export default function AddLoansPage() {
           triggerModal(
             "warning",
             "Restricted Action",
-            `You cannot select "${matchedGroupContact.name}" because the current Lender (${lenderNameInput}) is already a member of this group. Please choose another group configuration.`
+            `You cannot select "${groupName}" because the current Lender (${lenderNameInput}) is already a member of this group.`
           )
           setGroupName("")
           setManualMembers([{ name: "", phone: "" }])
           return
         }
 
-        if (formattedMembers.length > 0) {
-          setManualMembers(formattedMembers)
-        }
+        // reset first so UI doesn't keep old stale rows
+setManualMembers([{ name: "", phone: "" }])
+
+if (formattedMembers.length > 0) {
+  setManualMembers(formattedMembers)
+}
       } catch (err) {
         console.error("Failed to parse group membership autofill maps:", err)
       }
@@ -427,7 +477,13 @@ export default function AddLoansPage() {
         status: transactionType === "installment_expense" ? paymentStatus.toLowerCase() : "unpaid", 
         date_borrowed: new Date().toISOString().split('T')[0],
         group_id: targetGroupId,
-        ref_id: generatedRefId
+        ref_id: generatedRefId,
+        ...(transactionType === "installment_expense" && {
+          payment_frequency: paymentFrequency.toLowerCase(),
+          recurrence_day: paymentFrequency === "Monthly" ? paymentDayMonthly : paymentDayWeekly,
+          start_date: startDate,
+          total_terms: installmentsTotalTerms,
+        })
       }
 
       const { data: insertedEntries, error: entryError } = await supabase
@@ -483,11 +539,9 @@ export default function AddLoansPage() {
     c.name.toLowerCase() !== lenderNameInput.trim().toLowerCase()
   )
   
-  const filteredGroups = contacts.filter(c => 
-    c.type === "group" && 
-    c.name.toLowerCase().includes(groupName.toLowerCase()) &&
-    c.name.toLowerCase() !== lenderNameInput.trim().toLowerCase()
-  )
+  const filteredGroups = groups.filter(g =>
+  g.group_name.toLowerCase().includes(groupName.toLowerCase())
+)
   
   const activeSelectedNamesSet = new Set(manualMembers.map(m => m.name.trim().toLowerCase()))
 
@@ -595,9 +649,9 @@ export default function AddLoansPage() {
                 {activeDropdown.field === "group" && filteredGroups.length > 0 && (
                   <ul className="dropdown-menu show w-100 shadow-sm border border-light-subtle position-absolute start-0 mt-1 overflow-y-auto" style={{ maxHeight: "200px", zIndex: 1000 }}>
                     {filteredGroups.map(g => (
-                      <li key={g.contact_id}>
-                        <button type="button" className="dropdown-item py-2 border-bottom border-light-subtle text-start" onClick={() => { setGroupName(g.name); setActiveDropdown({ field: null }); }}>
-                          <div className="fw-medium text-dark">{g.name}</div>
+                      <li key={g.group_id}>
+                        <button type="button" className="dropdown-item py-2 border-bottom border-light-subtle text-start" onClick={() => { setGroupName(g.group_name); setActiveDropdown({ field: null }); }}>
+                          <div className="fw-medium text-dark">{g.group_name}</div>
                         </button>
                       </li>
                     ))}
@@ -722,10 +776,12 @@ export default function AddLoansPage() {
                           className="form-control form-control-sm"
                           placeholder="Search or Type Name"
                           value={member.name}
-                          onFocus={() => setActiveDropdown({ field: index })}
-                          onChange={(e) => { handleManualMemberNameChange(index, e.target.value); setActiveDropdown({ field: index }); }}
+                          onFocus={() => setActiveDropdown({ field: "member_row", index })}
+                          onChange={(e) => { handleManualMemberNameChange(index, e.target.value); setActiveDropdown({ field: "member_row", index }); }}
                         />
-                        {activeDropdown.field === index && filteredRowContacts.length > 0 && (
+                        {activeDropdown.field === "member_row" &&
+ activeDropdown.index === index &&
+ filteredRowContacts.length > 0 && (
                           <ul className="dropdown-menu show w-100 shadow-sm border border-light-subtle position-absolute start-0 mt-1 overflow-y-auto" style={{ maxHeight: "150px", zIndex: 1010 }}>
                             {filteredRowContacts.map(c => (
                               <li key={c.contact_id}>
