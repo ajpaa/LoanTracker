@@ -1,4 +1,4 @@
-'use server';
+
 import { supabase } from '@/services/supabase'
 
 // Get all contacts from contacts_totals (which has the calculated totals)
