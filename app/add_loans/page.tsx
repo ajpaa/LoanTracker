@@ -444,7 +444,13 @@ export default function AddLoansPage() {
         status: transactionType === "installment_expense" ? paymentStatus.toLowerCase() : "unpaid", 
         date_borrowed: new Date().toISOString().split('T')[0],
         group_id: targetGroupId,
-        ref_id: generatedRefId
+        ref_id: generatedRefId,
+        ...(transactionType === "installment_expense" && {
+          payment_frequency: paymentFrequency.toLowerCase(),
+          recurrence_day: paymentFrequency === "Monthly" ? paymentDayMonthly : paymentDayWeekly,
+          start_date: startDate,
+          total_terms: installmentsTotalTerms,
+        })
       }
 
       const { data: insertedEntries, error: entryError } = await supabase
