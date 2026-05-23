@@ -46,11 +46,7 @@ export default function ContactsPage() {
     const newContact = {
       name,
       contact_info: contactInfo,
-<<<<<<< HEAD
-      type: isGroupMember ? 'person' : 'person'
-=======
       type: isGroupMember ? 'group' : 'independent'
->>>>>>> princess-test
     }
 
     try {
@@ -157,11 +153,7 @@ export default function ContactsPage() {
                         Person ({c.member_of_group}) 👤
                       </button>
                     ) : (
-<<<<<<< HEAD
-                      <span className="badge bg-secondary">Independent</span>
-=======
                       <span className="badge bg-secondary">{c.type === 'group' ? 'Group Member' : 'Independent'}</span>
->>>>>>> princess-test
                     )}
                   </td>
                   <td>
@@ -176,11 +168,7 @@ export default function ContactsPage() {
                       <button
                         type="button"
                         onClick={async () => {
-<<<<<<< HEAD
-                          const confirmDelete = confirm(`Are you sure you want to delete ${c.name}?`);
-=======
                           const confirmDelete = confirm('Are you sure you want to delete ${c.name}?');
->>>>>>> princess-test
                           if (!confirmDelete) return;
                           try {
                             await deleteContact(c.id);
