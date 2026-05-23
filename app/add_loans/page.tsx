@@ -58,9 +58,11 @@ export default function AddLoansPage() {
 
   // Custom Dropdown Active UI State
   const [activeDropdown, setActiveDropdown] = useState<{
-  field: "borrower" | "lender" | "group" | "bulk_members" | "member_row" | null
+  field: "group" | "borrower" | "lender" | "bulk_members" | "member_row" | null
   index?: number
-}>({ field: null })
+}>({
+  field: null,
+})
   
   // Inline Multi-select search query string
   const [bulkSearchQuery, setBulkSearchQuery] = useState("")
@@ -209,7 +211,7 @@ if (lenderInGroup && lenderNameInput.trim() !== "") {
           triggerModal(
             "warning",
             "Restricted Action",
-            `You cannot select "${matchedGroupContact.name}" because the current Lender (${lenderNameInput}) is already a member of this group. Please choose another group configuration.`
+            `You cannot select "${groupName}" because the current Lender (${lenderNameInput}) is already a member of this group.`
           )
           setGroupName("")
           setManualMembers([{ name: "", phone: "" }])
@@ -775,7 +777,7 @@ if (formattedMembers.length > 0) {
                           placeholder="Search or Type Name"
                           value={member.name}
                           onFocus={() => setActiveDropdown({ field: "member_row", index })}
-                          onChange={(e) => { handleManualMemberNameChange(index, e.target.value); setActiveDropdown({ field: index }); }}
+                          onChange={(e) => { handleManualMemberNameChange(index, e.target.value); setActiveDropdown({ field: "member_row", index }); }}
                         />
                         {activeDropdown.field === "member_row" &&
  activeDropdown.index === index &&
@@ -783,7 +785,7 @@ if (formattedMembers.length > 0) {
                           <ul className="dropdown-menu show w-100 shadow-sm border border-light-subtle position-absolute start-0 mt-1 overflow-y-auto" style={{ maxHeight: "150px", zIndex: 1010 }}>
                             {filteredRowContacts.map(c => (
                               <li key={c.contact_id}>
-                                <button type="button" className="dropdown-item py-1 border-bottom border-light-subtle text-start small" onClick={() => { handleManualMemberNameChange(index, c.name); setActiveDropdown({ field: null, index: undefined }); }}>
+                                <button type="button" className="dropdown-item py-1 border-bottom border-light-subtle text-start small" onClick={() => { handleManualMemberNameChange(index, c.name); setActiveDropdown({ field: null }); }}>
                                   <strong>{c.name}</strong>
                                 </button>
                               </li>
