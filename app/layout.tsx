@@ -3,7 +3,7 @@ import Sidebar from "./components/layout/sidebar";
 import "@/app/globals.css";
 
 export const metadata = {
-  title: "Whale Loans Tracker Workspace",
+  title: "AuditFlow",
   description: "Premium SaaS system layout engine context configuration",
 };
 

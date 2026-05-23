@@ -46,7 +46,7 @@ export default function ContactsPage() {
     const newContact = {
       name,
       contact_info: contactInfo,
-      type: isGroupMember ? 'group' : 'independent'
+      type: isGroupMember ? 'group' : 'person'
     }
 
     try {
