@@ -156,6 +156,7 @@ export default function AddLoansPage() {
         const groupRow = groupRows[0]
 
         const { data: memberships, error: memErr } = await supabase
+        
           .from("group_memberships")
           .select(`
             member_id,
@@ -165,6 +166,25 @@ export default function AddLoansPage() {
             )
           `)
           .eq("group_id", groupRow.group_id)
+
+          const lenderInGroup = memberships?.some((m: any) => {
+  const contact = Array.isArray(m.contacts) ? m.contacts[0] : m.contacts
+  return contact?.name?.toLowerCase() === lenderNameInput.trim().toLowerCase()
+})
+
+if (lenderInGroup && lenderNameInput.trim() !== "") {
+  triggerModal(
+    "warning",
+    "Invalid Group Selection",
+    `The lender "${lenderNameInput}" is already a member of "${groupName}". You cannot select this group.`
+  )
+
+  setGroupName("")
+  setManualMembers([{ name: "", phone: "" }])
+  setActiveDropdown({ field: null })
+
+  return
+}
 
         if (memErr || !memberships) return
 
